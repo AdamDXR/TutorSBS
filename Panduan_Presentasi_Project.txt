@@ -1,0 +1,91 @@
+PANDUAN PRESENTASI / CODE REVIEW ADVANCED PROJECT (TutorSBS)
+=================================================
+
+Dokumen ini berisi panduan skenario langkah demi langkah untuk menjelaskan bagaimana 10 spesifikasi proyek telah terpenuhi 100%, beserta fitur tambahan (ekstra) yang telah ditambahkan.
+
+Pastikan server lokal sudah berjalan dengan perintah: `php artisan serve` (biasanya di http://localhost:8000).
+
+---
+
+1. Framework PHP & Database
+- Penjelasan: Proyek ini menggunakan Laravel 11 (Framework PHP). Database sudah siap untuk MySQL. Saat ini kita jalankan dengan mode SQLite lokal agar mudah didemokan tanpa perlu menyalakan XAMPP. Nama aplikasi telah disesuaikan menjadi "TutorSBS".
+- Referensi Kode: Konfigurasi SQLite di `.env` (Baris 20-25) dan struktur MVC di folder `app/` serta `database/migrations/`.
+- Cara Pembuktian: Tunjukkan struktur folder dan file `.env` yang digunakan.
+
+2. Framework CSS
+- Penjelasan: Antarmuka (UI) dibangun sepenuhnya menggunakan framework Bootstrap 5.
+- Referensi Kode: `resources/views/layouts/app.blade.php` (Baris 7-8).
+- Cara Pembuktian: Buka file tersebut, tunjukkan baris CDN `<link href="https://cdn.jsdelivr.net/.../bootstrap.min.css">`. Secara visual, UI juga sudah menggunakan komponen khas Bootstrap seperti Card, Button, dan Navbar.
+
+3. Upload Project pada GitHub
+- Penjelasan: Proyek ini menggunakan Git version control dan di-push ke repository GitHub.
+- Cara Pembuktian: Buka terminal, tunjukkan log commit menggunakan perintah `git log`, atau buka halaman URL repository GitHub proyek Anda langsung di browser.
+
+4. Halaman Login (Webservice Client JWT)
+- Penjelasan: Sistem login menembak API Vercel eksternal (https://jwt-auth-eight-neon.vercel.app/login). Jika sukses, token "refreshToken" akan didapat dan disimpan di session aplikasi.
+- Referensi Kode: `app/Http/Controllers/AuthController.php` -> Fungsi `process()` (Baris 27-51).
+- Cara Pembuktian:
+  1. Buka browser di http://localhost:8000/login
+  2. Input email: aprilyani.safitri@gmail.com
+  3. Input password: 123456
+  4. Klik Login. (Bisa juga ditunjukkan kode Http::post di AuthController).
+
+5. Manajemen Master Tutorial CRUD
+- Penjelasan: CRUD tabel Master Tutorial. Menu ini diproteksi autentikasi middleware. Dropdown "Mata Kuliah" ditarik langsung dari API eksternal Vercel. Fitur unik (unique string) diterapkan pada isian url.
+- Referensi Kode: 
+  * Penarikan API Eksternal Makul: `app/Http/Controllers/MasterTutorialController.php` -> Fungsi `fetchMakul()` (Baris 114-124).
+  * Validasi URL Unik: `MasterTutorialController.php` -> Fungsi `store()` (Baris 40).
+- Cara Pembuktian: 
+  1. Di dashboard, klik "+ Tambah Data".
+  2. Tunjukkan bahwa dropdown "Mata Kuliah" berhasil memuat data dari API Vercel (PWL, PBO).
+  3. Coba masukkan "URL Presentation" yang sama dengan data yang sudah ada, tunjukkan sistem akan memblokirnya karena bersifat unik.
+
+6. Manajemen Detail Tutorial CRUD (One-to-Many)
+- Penjelasan: Relasi tabel Master -> Detail (One to Many). Fitur unggulan di sini adalah pengelolaan gambar yang dinamis.
+- Referensi Kode: 
+  * Relasi Model: `app/Models/MasterTutorial.php` -> Fungsi `details()` (Baris 20-23).
+  * Upload Gambar & Safe Delete: `app/Http/Controllers/DetailTutorialController.php` -> Fungsi `update()` (Baris 99-115).
+  * JS Matikan URL & Tunda Hapus: `resources/views/detail_tutorial/edit.blade.php` (Baris 92-150).
+- Cara Pembuktian:
+  1. Buka daftar Master Tutorial, klik tombol biru muda "Kelola Detail".
+  2. Klik "Tambah Data Baru". Tunjukkan bahwa user bisa Upload Gambar atau menggunakan URL. Jika user memilih file dari perangkat, input URL otomatis terkunci.
+  3. Coba Edit data yang sudah memiliki gambar. Tunjukkan bahwa Anda bisa menghapus gambar dengan menekan tombol (X) di pojok gambar (akan muncul SweetAlert). Pratinjau gambar akan hilang.
+  4. Tunjukkan juga fitur pencegahan kesalahan: Jika kita menekan "Batal Edit", perubahan (termasuk penghapusan gambar tadi) tidak akan disimpan ke database. Namun jika kita menekan "Update Detail", gambar baru benar-benar terhapus.
+
+7. Menu Logout (Webservice Client)
+- Penjelasan: Logout akan mengirimkan request DELETE ke API Vercel menyertakan refreshToken, kemudian sesi dihapus.
+- Referensi Kode: `app/Http/Controllers/AuthController.php` -> Fungsi `logout()` (Baris 56-70).
+- Cara Pembuktian: Klik nama User di pojok kanan atas -> klik "Logout". Akan muncul konfirmasi SweetAlert. Jika di 'Ok', user ter-logout dan diredirect ke halaman login.
+
+8. View Tutorial (URL Presentation) - AJAX AUTO REFRESH & CODE TOOLS
+- Penjelasan: Halaman publik HANYA menampilkan detail berstatus "show". Halaman menggunakan polling AJAX untuk merefresh konten secara interaktif. Terdapat juga tombol pintasan PDF dan tools copy/download untuk kode.
+- Referensi Kode: 
+  * Logika Fetch / Polling 10 detik: `resources/views/public/presentation.blade.php` (Baris 78-120).
+  * Tombol Copy & Download Code JS: `resources/views/public/presentation.blade.php` (Baris 168-202).
+  * JSON Provider untuk Polling: `app/Http/Controllers/PublicController.php` -> Fungsi `getLatestDetails()` (Baris 27-39).
+- Cara Pembuktian (Penting!):
+  1. Buka 2 tab bersebelahan (split screen).
+  2. Kiri (Publik): Buka http://localhost:8000/tutorial/laravel-dasar
+  3. Kanan (Admin): Login, kelola detail "Tutorial Laravel Dasar". 
+  4. Di tab Kanan (Admin), ubah status langkah dari "Hide" menjadi "Show".
+  5. Perhatikan tab Kiri (Publik)! Dalam 10 detik, konten HTML akan berubah otomatis.
+  6. Fitur Ekstra: Tunjukkan tombol "📄 Download PDF Lengkap" di bagian atas.
+  7. Fitur Ekstra: Tunjukkan tombol "📋 Copy" dan "💾 Download (.txt)" pada setiap blok kode pemrograman.
+
+9. View / Download PDF (URL Finished)
+- Penjelasan: Endpoint mencetak PDF dokumen penuh, termasuk langkah-langkah rahasia internal. Menggunakan library Dompdf.
+- Referensi Kode: `app/Http/Controllers/PublicController.php` -> Fungsi `pdf()` (Baris 42-50).
+- Cara Pembuktian: 
+  1. Buka URL: http://localhost:8000/tutorial-pdf/laravel-dasar-pdf (atau tekan tombol PDF di halaman publik).
+  2. Tunjukkan bahwa browser langsung merender PDF. Tunjukkan bahwa langkah berstatus "hide" ikut tercetak.
+
+10. List Tutorial per Mata Kuliah (Webservice Server)
+- Penjelasan: Proyek ini juga berfungsi sebagai API Provider yang mengembalikan JSON data master tutorial berdasarkan parameter mata kuliah untuk diakses oleh client dari luar.
+- Referensi Kode: `app/Http/Controllers/ApiController.php` -> Fungsi `index()` (Baris 12-25) dan `routes/api.php` (Baris 7).
+- Cara Pembuktian:
+  1. Buka browser atau Postman.
+  2. Akses endpoint: http://localhost:8000/api/tutorials?kode_makul=PWL
+  3. Tunjukkan bahwa browser menampilkan format array JSON.
+
+=================================================
+Semoga berhasil dengan presentasinya!

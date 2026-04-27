@@ -1,0 +1,83 @@
+PENJELASAN LOGIKA SISTEM (TutorSBS)
+=================================================
+
+Dokumen ini menjelaskan tiga logika inti di balik layar aplikasi TutorSBS, yang sering ditanyakan saat presentasi atau *code review*.
+
+---
+
+1. LOGIKA PEMBUATAN URL (MASTER VS PRESENTASI VS PDF)
+Sistem menggunakan pendekatan "Slug URL" yang aman dan ramah mesin pencari (SEO-friendly).
+
+* Data di Database:
+  Saat pengguna (Admin) membuat Master Tutorial baru, sistem memintanya memasukkan "URL Presentation" dan "URL Finished". Di dalam `MasterTutorialController`, sistem menggunakan fungsi `Str::slug()` bawaan Laravel untuk memastikan teks yang diinput berubah menjadi format URL baku (huruf kecil semua, spasi diubah menjadi tanda strip `-`, karakter unik dibuang).
+
+* Cara Mengakses (Routing di `routes/web.php`):
+  Sistem membedakan URL secara fisik melalui fitur Middleware:
+  - Master Tutorial (Admin): Akses ke `/master-tutorial` dan `/detail-tutorial` dibungkus dengan `middleware('auth.custom')`. Ini bertindak sebagai "satpam". Jika tidak memiliki token login (JWT), pengguna otomatis dilempar ke halaman login.
+  - Presentasi (Publik): Rute `http://localhost:8000/tutorial/{url_presentation}` diletakkan di LUAR middleware. Siapa pun di internet bisa mengaksesnya. Controller `PublicController` bertugas melayani URL ini dan *hanya* akan mengirimkan data yang berstatus "Show" (aktif).
+  - PDF (Publik): Rute `http://localhost:8000/tutorial-pdf/{url_finished}` juga diletakkan di luar middleware. Logikanya akan mencetak semua detail langkah (termasuk yang "Hide" / rahasia internal) ke dalam selembar dokumen PDF menggunakan *library* Dompdf.
+
+---
+
+2. PENJELASAN TAMPILAN API (FORMAT JSON)
+Data aneh berstruktur kurung kurawal yang muncul di layar (contoh saat mengakses `http://localhost:8000/api/tutorials?kode_makul=PWL`) adalah murni data dalam format JSON (*JavaScript Object Notation*).
+
+* Logikanya: 
+  Sistem berfungsi sebagai *API Provider* (Penyedia API). Ketika seseorang memanggil URL API tersebut, request diterima oleh `ApiController.php`. Controller ini akan masuk ke database `MasterTutorial`, menyaring data berdasarkan parameter (jika ada), dan mengubah data mentah dari database menjadi teks berstruktur JSON dengan perintah `return response()->json()`.
+
+* Tujuannya: 
+  Ini adalah gerbang untuk integrasi lintas platform. Dengan adanya format JSON ini, pihak ketiga (seperti aplikasi *mobile* Android, iOS, atau antarmuka React/Vue) dapat dengan mudah "menyedot" data tutorial dari aplikasi kita tanpa harus terhubung ke database SQLite/MySQL secara langsung. Mereka cukup membaca JSON ini dan mendesain tampilannya sendiri di platform mereka.
+
+---
+
+3. LOGIKA LAYOUT TAMPILAN (ADMIN VS PUBLIK)
+Perbedaan terbesar pada sisi *frontend* (antarmuka) antara tampilan Admin dan Publik adalah pada penerapan **Templating Blade (Inheritance/Warisan)**.
+
+* Tampilan Admin (Master/Detail Tutorial):
+  Sistem menggunakan konsep warisan (*extends*). Semua file halaman admin diawali dengan deklarasi `@extends('layouts.app')`.
+  Artinya, halaman admin ini *menumpang* pada sebuah kerangka utama yang sudah didefinisikan secara terpusat di `resources/views/layouts/app.blade.php`. Oleh karena itu, di halaman-halaman admin akan selalu muncul kerangka konsisten seperti *Navbar* atas (logo, menu, tombol Logout) dan impor library bawaan secara otomatis.
+
+* Tampilan Presentasi (Publik):
+  Halaman ini sengaja dirancang secara **MANDIRI (*Standalone*)**. Jika Anda membuka `resources/views/public/presentation.blade.php`, Anda tidak akan menemukan kode `@extends`. File ini menuliskan struktur HTML dari titik nol (dimulai dengan `<!DOCTYPE html>`).
+  Hal ini dilakukan bukan tanpa alasan. Tujuannya adalah agar audiens (pengunjung publik) mendapatkan pengalaman presentasi (*fullscreen-like*) yang bersih, fokus seratus persen pada materi pelajaran, dan tidak terdistraksi oleh keberadaan *Navbar* pengelolaan admin yang tidak berguna bagi mereka.
+
+---
+
+4. FUNGSI SLUG PADA PEMBUATAN URL
+URL pada aplikasi ini sebenarnya **bukan** dihasilkan secara *random* (acak), melainkan diketik secara manual oleh pengguna.
+Sistem menggunakan fungsi `Str::slug()` (misal di `MasterTutorialController`) untuk bertindak sebagai "Tukang Bersih-Bersih".
+Fungsi ini melakukan 4 operasi:
+- Mengubah semua huruf menjadi huruf kecil.
+- Mengganti spasi antar kata menjadi tanda strip `-`.
+- Membuang simbol & tanda baca aneh (seperti `&`, `(`, `)`, `!`).
+- Merapikan strip ganda menjadi satu strip saja.
+Tujuannya agar URL selalu aman, tidak error di browser, dan mematuhi standar internet (SEO Friendly). Contoh: "Belajar HTML!" menjadi "belajar-html".
+
+---
+
+5. ALUR PENYIMPANAN DATA (DARI FORM HINGGA TAMPIL DI TABEL)
+Alurnya melewati 5 fase:
+1. **Input (View):** Pengguna mengetik di form (tag `<input>`) dan klik Simpan. HTML mengirim data ke server via POST.
+2. **Ditangkap Controller:** Fungsi `store()` di `MasterTutorialController` menangkap kiriman tersebut, memprosesnya (misal melakukan slugging).
+3. **Mendarat di Database:** Perintah `MasterTutorial::create(...)` menyisipkan baris baru ke dalam tabel `master_tutorial` di file database SQLite secara permanen.
+4. **Ditarik Kembali:** Saat membuka menu, fungsi `index()` memerintahkan `$tutorials = MasterTutorial::orderBy('created_at', 'desc')->get();` untuk menarik ulang semua data dari database.
+5. **Dilempar ke Tabel (View):** Kumpulan data tadi dikirim ke `index.blade.php`. Menggunakan *looping* `@foreach($tutorials as $item)`, data dicetak satu per satu ke dalam sel tabel HTML (`<td>{{ $item->url_presentation }}</td>`) sehingga tampil di layar.
+
+---
+
+6. LOGIKA PENYIMPANAN GAMBAR
+Penyimpanan gambar terbagi menjadi dua lokasi terpisah:
+* **File Fisiknya:** Wujud asli foto (misal `.png` atau `.jpg`) TIDAK dimasukkan ke dalam database. Laravel menyimpannya ke dalam folder server lokal di `storage/app/public/tutorials/` (yang di-link ke `public/storage/tutorials/`).
+* **Datanya (Database):** Tabel `detail_tutorial` hanya bertugas menyimpan teks alamat lengkap gambar tersebut (contoh: `http://localhost:8000/storage/tutorials/foto.png`).
+Saat halaman web dimuat, tag HTML `<img src="...">` membaca alamat teks dari database tersebut dan memunculkan fotonya ke layar pengguna.
+
+---
+
+7. LOGIKA RELASI ONE-TO-MANY (SATU MASTER, BANYAK DETAIL)
+Relasi ini ditanamkan pada tiga bagian:
+* **Database (Migration):** Di file migration tabel detail, terdapat perintah `$table->foreignId('master_tutorial_id')->constrained('master_tutorial')->onDelete('cascade');`. Ini memaksa setiap data detail menempel pada ID master tertentu, dan akan ikut terhapus jika masternterhapus.
+* **Model (Eloquent):** File `MasterTutorial.php` mendeklarasikan `$this->hasMany(DetailTutorial::class);` (posisi Induk), dan `DetailTutorial.php` membalas dengan `$this->belongsTo(MasterTutorial::class);` (posisi Anak).
+* **Controller (Pengambilan Data):** Pada `PublicController`, digunakan perintah `DetailTutorial::where('master_tutorial_id', $master->id)->get();` untuk menyortir dan HANYA menarik anak-anak detail yang secara eksklusif milik master yang sedang dibuka.
+
+=================================================
+Gunakan dokumen ini sebagai panduan mental untuk menjawab pertanyaan teknis mendalam tentang arsitektur sistem.
